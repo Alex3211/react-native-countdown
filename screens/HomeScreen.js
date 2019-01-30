@@ -1,188 +1,156 @@
 import React from 'react';
+import Counter from '../components/Counter';
 import {
   Image,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
+  Button,
   TouchableOpacity,
+  TextInput,
   View,
+  ListView,
+  DatePickerAndroid
 } from 'react-native';
-import { WebBrowser } from 'expo';
 
-import { MonoText } from '../components/StyledText';
 
 export default class HomeScreen extends React.Component {
   static navigationOptions = {
-    header: null,
+    title: 'Compte à rebours',
   };
-
+  constructor(props) {
+    super(props);
+    const tmpds = new ListView.DataSource({rowHasChanged: (r1, r2) => r1 !== r2});
+    this.state = {
+      date: new Date(),
+      ds: tmpds,
+      Countdowns: tmpds.cloneWithRows([]),
+      data: [
+      ],
+      start: null,
+      stop: null,
+      title: '',
+      error: false
+    };
+    this.state.Countdowns = this.state.ds.cloneWithRows(this.state.data);
+  }
+  async datePickerClick(isForStart) {
+    try {
+      const {action, year, month, day} = await DatePickerAndroid.open({
+        date: new Date()
+      });
+      if (action !== DatePickerAndroid.dismissedAction) {
+        const date = new Date(`${month > 9 ? month : `0${month+1}`}/${day > 9 ? day : `0${day}`}/${year}`);
+        date.setHours(1);
+        if(isForStart) {
+          this.setState({start: date, error: false})
+        }
+        else {
+          this.setState({stop: date, error: false})
+        }
+      }
+    } catch ({code, message}) {
+      console.warn('Cannot open date picker', message);
+    }
+  }
+  deleteitem(title) {
+    if(!title) return;
+    const tmp = this.state.data;
+    tmp.splice(tmp.indexOf(e => e.title === title), 1);
+    this.setState({start: null, stop: null, title: '', data: tmp, Countdowns: this.state.ds.cloneWithRows(tmp), error: false})
+  }
+  add() {
+    if(this.state.start && this.state.stop && this.state.title && this.state.data.indexOf(e => e.title === this.state.title) === -1) {
+      const tmp = this.state.data;
+      tmp.push({
+        start: this.state.start,
+        stop: this.state.stop,
+        title: this.state.title
+      })
+      this.setState({start: null, stop: null, title: '', data: tmp, Countdowns: this.state.ds.cloneWithRows(tmp), error: false})
+    } else {
+      this.setState({start: null, stop: null, title: '', error: true})
+    }
+  }
+  formatDate(date) {
+    return ` ${date.getMonth() > 9 ? date.getMonth() : `0${date.getMonth()+1}`}/${date.getDate() > 9 ? date.getDate() : `0${date.getDate()}`}/${date.getFullYear()}`;
+  }
   render() {
     return (
       <View style={styles.container}>
         <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-          <View style={styles.welcomeContainer}>
-            <Image
-              source={
-                __DEV__
-                  ? require('../assets/images/robot-dev.png')
-                  : require('../assets/images/robot-prod.png')
-              }
-              style={styles.welcomeImage}
-            />
-          </View>
-
-          <View style={styles.getStartedContainer}>
-            {this._maybeRenderDevelopmentModeWarning()}
-
-            <Text style={styles.getStartedText}>Get started by opening</Text>
-
-            <View style={[styles.codeHighlightContainer, styles.homeScreenFilename]}>
-              <MonoText style={styles.codeHighlightText}>screens/HomeScreen.js</MonoText>
-            </View>
-
-            <Text style={styles.getStartedText}>
-              Change this text and your app will automatically reload.
-            </Text>
-          </View>
-
-          <View style={styles.helpContainer}>
-            <TouchableOpacity onPress={this._handleHelpPress} style={styles.helpLink}>
-              <Text style={styles.helpLinkText}>Help, it didn’t automatically reload!</Text>
-            </TouchableOpacity>
-          </View>
+          <ListView
+            style={styles.listItemsContainer}
+            dataSource={this.state.Countdowns}
+            enableEmptySections={true}
+            renderRow={(counter) => <Counter delete={(title) => this.deleteitem(title)} data={counter} />} />
         </ScrollView>
-
-        <View style={styles.tabBarInfoContainer}>
-          <Text style={styles.tabBarInfoText}>This is a tab bar. You can edit it in:</Text>
-
-          <View style={[styles.codeHighlightContainer, styles.navigationFilename]}>
-            <MonoText style={styles.codeHighlightText}>navigation/MainTabNavigator.js</MonoText>
+        <View style={styles.bottomContainer}>
+          <TextInput
+            style={{height: 40, borderColor: 'gray', borderWidth: 1, padding: 10}}
+            onChangeText={(text) => this.setState({title: text, error: false})}
+            value={this.state.title}
+          />
+          <View style={styles.bottomContainerContent}>
+            {
+              this.state.error &&
+              <Text style={styles.error}>
+                Please choose a title and two dates before adding.
+              </Text>
+            }
+            {
+              this.state.start &&
+              <Text>
+                Selected: {this.formatDate(this.state.start)}
+              </Text>
+            }
+            <Button onPress={() => this.datePickerClick(true)} title={'Choose start date'}>
+            </Button>
+            {
+              this.state.stop &&
+              <Text>
+                Selected: {this.formatDate(this.state.stop)}
+              </Text>
+            }
+            <Button onPress={() => this.datePickerClick(false)} title={'Choose end date'}>
+            </Button>
+            <Button onPress={() => this.add()} title={'Add'}>
+            </Button>
           </View>
         </View>
       </View>
     );
   }
-
-  _maybeRenderDevelopmentModeWarning() {
-    if (__DEV__) {
-      const learnMoreButton = (
-        <Text onPress={this._handleLearnMorePress} style={styles.helpLinkText}>
-          Learn more
-        </Text>
-      );
-
-      return (
-        <Text style={styles.developmentModeText}>
-          Development mode is enabled, your app will be slower but you can use useful development
-          tools. {learnMoreButton}
-        </Text>
-      );
-    } else {
-      return (
-        <Text style={styles.developmentModeText}>
-          You are not in development mode, your app will run at full speed.
-        </Text>
-      );
-    }
-  }
-
-  _handleLearnMorePress = () => {
-    WebBrowser.openBrowserAsync('https://docs.expo.io/versions/latest/guides/development-mode');
-  };
-
-  _handleHelpPress = () => {
-    WebBrowser.openBrowserAsync(
-      'https://docs.expo.io/versions/latest/guides/up-and-running.html#can-t-see-your-changes'
-    );
-  };
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
-  },
-  developmentModeText: {
-    marginBottom: 20,
-    color: 'rgba(0,0,0,0.4)',
-    fontSize: 14,
-    lineHeight: 19,
-    textAlign: 'center',
+    backgroundColor: '#F5FCFF'
   },
   contentContainer: {
-    paddingTop: 30,
   },
-  welcomeContainer: {
-    alignItems: 'center',
-    marginTop: 10,
-    marginBottom: 20,
+  listItemsContainer: {
   },
-  welcomeImage: {
-    width: 100,
-    height: 80,
-    resizeMode: 'contain',
-    marginTop: 3,
-    marginLeft: -10,
+  bottomContainer: {
+    padding: 20,
+    borderTopWidth: 3,
+    borderTopColor: 'rgba(0,0,0,.04)',
+    flex: 1,
+    backgroundColor: '#FFF',
+    fontSize: 10,
+    flexDirection: 'column',
+    justifyContent: 'flex-start',
   },
-  getStartedContainer: {
-    alignItems: 'center',
-    marginHorizontal: 50,
+  error: {
+    color: 'red',
+    opacity: 0.8
   },
-  homeScreenFilename: {
-    marginVertical: 7,
-  },
-  codeHighlightText: {
-    color: 'rgba(96,100,109, 0.8)',
-  },
-  codeHighlightContainer: {
-    backgroundColor: 'rgba(0,0,0,0.05)',
-    borderRadius: 3,
-    paddingHorizontal: 4,
-  },
-  getStartedText: {
-    fontSize: 17,
-    color: 'rgba(96,100,109, 1)',
-    lineHeight: 24,
-    textAlign: 'center',
-  },
-  tabBarInfoContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    ...Platform.select({
-      ios: {
-        shadowColor: 'black',
-        shadowOffset: { height: -3 },
-        shadowOpacity: 0.1,
-        shadowRadius: 3,
-      },
-      android: {
-        elevation: 20,
-      },
-    }),
-    alignItems: 'center',
-    backgroundColor: '#fbfbfb',
-    paddingVertical: 20,
-  },
-  tabBarInfoText: {
-    fontSize: 17,
-    color: 'rgba(96,100,109, 1)',
-    textAlign: 'center',
-  },
-  navigationFilename: {
-    marginTop: 5,
-  },
-  helpContainer: {
-    marginTop: 15,
-    alignItems: 'center',
-  },
-  helpLink: {
-    paddingVertical: 15,
-  },
-  helpLinkText: {
-    fontSize: 14,
-    color: '#2e78b7',
-  },
+  bottomContainerContent: {
+    flex: 1,
+    fontSize: 6,
+    flexDirection: 'column',
+    justifyContent: 'space-evenly',
+  }
 });
